@@ -65,9 +65,11 @@ body { background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Sego
 </style>
 """
 
-# ── DB connection (cached for the Streamlit process lifetime) ─────────────────
+# ── DB connection (cached per schema version so deploys bust the cache) ──────
+_SCHEMA_VERSION = "v2"   # bump this whenever db.py schema changes
+
 @st.cache_resource
-def get_db() -> TursoDB:
+def get_db(_v: str = _SCHEMA_VERSION) -> TursoDB:
     db = TursoDB(
         url=st.secrets["TURSO_DATABASE_URL"],
         token=st.secrets["TURSO_AUTH_TOKEN"],
