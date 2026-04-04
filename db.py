@@ -41,9 +41,24 @@ SCHEMA = [
     "CREATE INDEX IF NOT EXISTS idx_cp_prob   ON company_problems(problem_id)",
     "CREATE INDEX IF NOT EXISTS idx_pt_topic  ON problem_topics(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_prob_diff ON problems(difficulty)",
+    # ── User management ───────────────────────────────────────────────────────
+    """CREATE TABLE IF NOT EXISTS users (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        username   TEXT    UNIQUE NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )""",
+    """CREATE TABLE IF NOT EXISTS user_problems (
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        problem_id INTEGER NOT NULL REFERENCES problems(id),
+        solved_at  INTEGER DEFAULT (strftime('%s','now')),
+        PRIMARY KEY (user_id, problem_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_up_user ON user_problems(user_id)",
 ]
 
 DROP_ALL = [
+    "DROP TABLE IF EXISTS user_problems",
+    "DROP TABLE IF EXISTS users",
     "DROP TABLE IF EXISTS company_problems",
     "DROP TABLE IF EXISTS problem_topics",
     "DROP TABLE IF EXISTS topics",
@@ -196,3 +211,28 @@ class TursoDB:
             t: int(self.scalar(f"SELECT COUNT(*) FROM {t}") or 0)
             for t in ["companies", "problems", "topics", "problem_topics", "company_problems"]
         }
+
+    # ── User management ───────────────────────────────────────────────────────
+
+    def create_or_get_user(self, username: str) -> int:
+        """Return user id, creating the user if they don't exist yet."""
+        self._run([self._stmt(
+            "INSERT OR IGNORE INTO users (username) VALUES (?)", [username]
+        )])
+        return int(self.scalar("SELECT id FROM users WHERE username = ?", [username]))
+
+    def get_solved_ids(self, user_id: int) -> set[int]:
+        return {self._val(r[0]) for r in
+                self.rows("SELECT problem_id FROM user_problems WHERE user_id = ?", [user_id])}
+
+    def mark_solved(self, user_id: int, problem_id: int) -> None:
+        self._run([self._stmt(
+            "INSERT OR IGNORE INTO user_problems (user_id, problem_id) VALUES (?, ?)",
+            [user_id, problem_id],
+        )])
+
+    def mark_unsolved(self, user_id: int, problem_id: int) -> None:
+        self._run([self._stmt(
+            "DELETE FROM user_problems WHERE user_id = ? AND problem_id = ?",
+            [user_id, problem_id],
+        )])

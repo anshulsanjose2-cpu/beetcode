@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from db import TursoDB
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -112,8 +113,32 @@ if not db.is_seeded():
     )
     st.stop()
 
-# ── Sidebar filters ───────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
+    # ── User section ──────────────────────────────────────────────────────────
+    st.markdown("### 👤 Account")
+    if "user_id" not in st.session_state:
+        username_input = st.text_input("Username", placeholder="Enter username to sign in")
+        if st.button("Sign in / Sign up", use_container_width=True):
+            uname = username_input.strip()
+            if uname:
+                uid = db.create_or_get_user(uname)
+                st.session_state["user_id"]   = uid
+                st.session_state["username"]  = uname
+                st.session_state["solved_ids"] = db.get_solved_ids(uid)
+                st.rerun()
+            else:
+                st.warning("Please enter a username.")
+    else:
+        st.success(f"Signed in as **{st.session_state['username']}**")
+        if st.button("Sign out", use_container_width=True):
+            for k in ("user_id", "username", "solved_ids"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+    st.markdown("---")
+
+    # ── Filters ───────────────────────────────────────────────────────────────
     st.markdown("### Filters")
     companies = db.get_companies()
     company   = st.selectbox("Company", companies, index=0)
@@ -154,20 +179,78 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Table ─────────────────────────────────────────────────────────────────────
-rows_html = "".join(
-    f"""<tr>
-      <td class="num">{p["ID"]}</td>
-      <td class="title"><a href="{p["URL"]}" target="_blank">{p["Title"]}</a></td>
-      <td>{topic_chips(p["_topics"])}</td>
-      <td>{difficulty_badge(p["Difficulty"])}</td>
-      <td><span class="acceptance">{p["Acceptance %"]:.1f}%</span></td>
-      <td>{freq_bar(p["Frequency %"])}</td>
-    </tr>"""
-    for p in problems
-)
+# ── Progress bar (logged-in users) ────────────────────────────────────────────
+if "user_id" in st.session_state and total > 0:
+    solved_ids  = st.session_state["solved_ids"]
+    solved_here = sum(1 for p in problems if p["ID"] in solved_ids)
+    progress    = solved_here / total
+    st.progress(progress, text=f"Solved **{solved_here} / {total}** problems in this view")
 
-st.html(TABLE_CSS + f"""
+# ── Table ─────────────────────────────────────────────────────────────────────
+if "user_id" in st.session_state:
+    # Interactive table with checkboxes via st.data_editor
+    solved_ids = st.session_state["solved_ids"]
+    df = pd.DataFrame([
+        {
+            "✓":           p["ID"] in solved_ids,
+            "#":           p["ID"],
+            "Title":       p["Title"],
+            "URL":         p["URL"],
+            "Topics":      ", ".join(p["_topics"][:3]),
+            "Difficulty":  p["Difficulty"],
+            "Acceptance":  round(p["Acceptance %"], 1),
+            "Frequency":   round(p["Frequency %"], 1),
+        }
+        for p in problems
+    ])
+
+    edited = st.data_editor(
+        df,
+        column_config={
+            "✓":          st.column_config.CheckboxColumn("✓", help="Mark as solved", width="small"),
+            "#":          st.column_config.NumberColumn("#", width="small"),
+            "Title":      st.column_config.LinkColumn("Title", display_text="(.+)", width="large"),
+            "URL":        None,   # hidden — used as link source
+            "Topics":     st.column_config.TextColumn("Topics"),
+            "Difficulty": st.column_config.TextColumn("Difficulty", width="small"),
+            "Acceptance": st.column_config.NumberColumn("Acceptance %", format="%.1f%%", width="small"),
+            "Frequency":  st.column_config.NumberColumn("Frequency %",  format="%.1f%%", width="small"),
+        },
+        disabled=["#", "Title", "URL", "Topics", "Difficulty", "Acceptance", "Frequency"],
+        hide_index=True,
+        use_container_width=True,
+        key="problem_table",
+    )
+
+    # Sync checkbox changes to Turso
+    user_id = st.session_state["user_id"]
+    for _, row in edited.iterrows():
+        pid     = int(row["#"])
+        checked = bool(row["✓"])
+        was     = pid in solved_ids
+        if checked and not was:
+            db.mark_solved(user_id, pid)
+            solved_ids.add(pid)
+        elif not checked and was:
+            db.mark_unsolved(user_id, pid)
+            solved_ids.discard(pid)
+    st.session_state["solved_ids"] = solved_ids
+
+else:
+    # Anonymous view — rich HTML table
+    rows_html = "".join(
+        f"""<tr>
+          <td class="num">{p["ID"]}</td>
+          <td class="title"><a href="{p["URL"]}" target="_blank">{p["Title"]}</a></td>
+          <td>{topic_chips(p["_topics"])}</td>
+          <td>{difficulty_badge(p["Difficulty"])}</td>
+          <td><span class="acceptance">{p["Acceptance %"]:.1f}%</span></td>
+          <td>{freq_bar(p["Frequency %"])}</td>
+        </tr>"""
+        for p in problems
+    )
+
+    st.html(TABLE_CSS + f"""
 <table class="lc-table">
   <thead><tr>
     <th>#</th><th>Title</th><th>Topics</th>
