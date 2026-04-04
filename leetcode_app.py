@@ -2,7 +2,7 @@ import streamlit as st
 from db import TursoDB
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Beetcode", page_icon="static/favicon.png", layout="wide")
+st.set_page_config(page_title="Beetcode", page_icon="🐝", layout="wide")
 
 st.markdown("""
 <style>
