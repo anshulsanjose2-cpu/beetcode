@@ -54,9 +54,19 @@ SCHEMA = [
         PRIMARY KEY (user_id, problem_id)
     )""",
     "CREATE INDEX IF NOT EXISTS idx_up_user ON user_problems(user_id)",
+    # ── Solutions ─────────────────────────────────────────────────────────────
+    """CREATE TABLE IF NOT EXISTS user_solutions (
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        problem_id INTEGER NOT NULL REFERENCES problems(id),
+        code       TEXT    NOT NULL DEFAULT '',
+        updated_at INTEGER DEFAULT (strftime('%s','now')),
+        PRIMARY KEY (user_id, problem_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_usol_user ON user_solutions(user_id)",
 ]
 
 DROP_ALL = [
+    "DROP TABLE IF EXISTS user_solutions",
     "DROP TABLE IF EXISTS user_problems",
     "DROP TABLE IF EXISTS users",
     "DROP TABLE IF EXISTS company_problems",
@@ -181,7 +191,7 @@ class TursoDB:
             args.append(f"%{search.strip()}%")
 
         sql = f"""
-            SELECT p.id, p.title, p.url, p.difficulty,
+            SELECT p.id, p.slug, p.title, p.url, p.difficulty,
                    cp.acceptance_pct, cp.frequency_pct,
                    GROUP_CONCAT(t.name, '|||') AS topics
             FROM company_problems cp
@@ -196,12 +206,13 @@ class TursoDB:
         return [
             {
                 "ID":           self._val(r[0]),
-                "Title":        self._val(r[1]) or "",
-                "URL":          self._val(r[2]) or "#",
-                "Difficulty":   self._val(r[3]) or "",
-                "Acceptance %": self._val(r[4]) or 0.0,
-                "Frequency %":  self._val(r[5]) or 0.0,
-                "_topics":      [t for t in (self._val(r[6]) or "").split("|||") if t],
+                "slug":         self._val(r[1]) or "",
+                "Title":        self._val(r[2]) or "",
+                "URL":          self._val(r[3]) or "#",
+                "Difficulty":   self._val(r[4]) or "",
+                "Acceptance %": self._val(r[5]) or 0.0,
+                "Frequency %":  self._val(r[6]) or 0.0,
+                "_topics":      [t for t in (self._val(r[7]) or "").split("|||") if t],
             }
             for r in self.rows(sql, args)
         ]
@@ -236,3 +247,21 @@ class TursoDB:
             "DELETE FROM user_problems WHERE user_id = ? AND problem_id = ?",
             [user_id, problem_id],
         )])
+
+    # ── Solutions ─────────────────────────────────────────────────────────────
+
+    def save_solution(self, user_id: int, problem_id: int, code: str) -> None:
+        self._run([self._stmt(
+            """INSERT INTO user_solutions (user_id, problem_id, code, updated_at)
+               VALUES (?, ?, ?, strftime('%s','now'))
+               ON CONFLICT(user_id, problem_id) DO UPDATE SET
+                   code = excluded.code,
+                   updated_at = strftime('%s','now')""",
+            [user_id, problem_id, code],
+        )])
+
+    def get_solution(self, user_id: int, problem_id: int) -> str:
+        return self.scalar(
+            "SELECT code FROM user_solutions WHERE user_id = ? AND problem_id = ?",
+            [user_id, problem_id],
+        ) or ""

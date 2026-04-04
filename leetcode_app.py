@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from db import TursoDB
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -15,6 +14,7 @@ html, body, [class*="css"] { font-family:-apple-system,BlinkMacSystemFont,"Segoe
 .stat-item { text-align:center; }
 .stat-num  { font-size:22px;font-weight:700;color:#ffffff; }
 .stat-lbl  { font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -62,11 +62,12 @@ body { background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Sego
 .freq-bar-wrap { background:#2a2a2a;border-radius:4px;height:6px;width:80px;overflow:hidden;display:inline-block;vertical-align:middle; }
 .freq-bar { height:100%;border-radius:4px;background:#ffa116; }
 .acceptance { color:#2cbb5d;font-size:13px; }
+.solve-btn { cursor:pointer;font-size:16px;user-select:none;text-align:center;width:28px; }
 </style>
 """
 
 # ── DB connection (cached per schema version so deploys bust the cache) ──────
-_SCHEMA_VERSION = "v2"   # bump this whenever db.py schema changes
+_SCHEMA_VERSION = "v3"   # bump this whenever db.py schema changes
 
 @st.cache_resource
 def get_db(_v: str = _SCHEMA_VERSION) -> TursoDB:
@@ -94,6 +95,20 @@ def freq_bar(val: float) -> str:
     pct = min(max(float(val), 0), 100)
     return (f'<div class="freq-bar-wrap"><div class="freq-bar" style="width:{pct}%"></div></div>'
             f' <span style="color:#888;font-size:12px">{pct:.0f}%</span>')
+
+def _sync_checkbox(pid: int) -> None:
+    """on_change callback: write only the changed checkbox to DB."""
+    user_id    = st.session_state["user_id"]
+    solved_ids = st.session_state.get("solved_ids", set())
+    if st.session_state[f"cb_{pid}"]:
+        db.mark_solved(user_id, pid)
+        solved_ids.add(pid)
+    else:
+        db.mark_unsolved(user_id, pid)
+        solved_ids.discard(pid)
+    st.session_state["solved_ids"] = solved_ids
+
+PAGE_SIZE = 100
 
 # ── App ───────────────────────────────────────────────────────────────────────
 db = get_db()
@@ -125,8 +140,11 @@ with st.sidebar:
             uname = username_input.strip()
             if uname:
                 uid = db.create_or_get_user(uname)
-                st.session_state["user_id"]   = uid
-                st.session_state["username"]  = uname
+                # Clear stale checkbox state from any previous session
+                for k in [k for k in st.session_state if k.startswith("cb_")]:
+                    del st.session_state[k]
+                st.session_state["user_id"]    = uid
+                st.session_state["username"]   = uname
                 st.session_state["solved_ids"] = db.get_solved_ids(uid)
                 st.rerun()
             else:
@@ -134,6 +152,8 @@ with st.sidebar:
     else:
         st.success(f"Signed in as **{st.session_state['username']}**")
         if st.button("Sign out", use_container_width=True):
+            for k in [k for k in st.session_state if k.startswith("cb_")]:
+                del st.session_state[k]
             for k in ("user_id", "username", "solved_ids"):
                 st.session_state.pop(k, None)
             st.rerun()
@@ -143,7 +163,7 @@ with st.sidebar:
     # ── Filters ───────────────────────────────────────────────────────────────
     st.markdown("### Filters")
     companies = db.get_companies()
-    company   = st.selectbox("Company", companies, index=0)
+    company      = st.selectbox("Company", companies, index=0)
     timeframe    = st.selectbox("Timeframe", list(TIMEFRAME_KEYS.keys()))
     difficulty   = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"])
     topic_filter = st.selectbox("Topic", ["All"] + db.get_topics())
@@ -181,77 +201,137 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Progress bar (logged-in users) ────────────────────────────────────────────
-if "user_id" in st.session_state and total > 0:
-    solved_ids  = st.session_state["solved_ids"]
-    solved_here = sum(1 for p in problems if p["ID"] in solved_ids)
-    progress    = solved_here / total
-    st.progress(progress, text=f"Solved **{solved_here} / {total}** problems in this view")
+# ── Interactive table fragment (only this section reruns on checkbox click) ────
+@st.fragment
+def interactive_table(problems):
+    solved_ids = st.session_state.get("solved_ids", set())
+
+    # Deduplicate by problem ID (same problem can appear for multiple companies)
+    seen = set()
+    unique_problems = []
+    for p in problems:
+        if p["ID"] not in seen:
+            seen.add(p["ID"])
+            unique_problems.append(p)
+    problems = unique_problems
+
+    # Progress bar
+    unique_ids   = {p["ID"] for p in problems}
+    total_unique = len(unique_ids)
+    if total_unique > 0:
+        solved_here = len(solved_ids & unique_ids)
+        prog_col, btn_col = st.columns([9, 1])
+        with prog_col:
+            st.progress(solved_here / total_unique,
+                        text=f"Solved **{solved_here} / {total_unique}** problems in this view")
+        if btn_col.button("Reset", key="reset_progress", help="Unmark all solved in this view"):
+            user_id = st.session_state["user_id"]
+            for pid in list(solved_ids & unique_ids):
+                db.mark_unsolved(user_id, pid)
+                solved_ids.discard(pid)
+                st.session_state[f"cb_{pid}"] = False
+            st.session_state["solved_ids"] = solved_ids
+            st.rerun(scope="fragment")
+
+    # Pagination
+    total_pages = max(1, (total_unique + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = st.session_state.get("table_page", 0)
+    page = max(0, min(page, total_pages - 1))
+    page_problems = problems[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+    # Compact row styling
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"] { gap:0rem;align-items:center;border-bottom:1px solid #2a2a2a;padding:2px 0; }
+    div[data-testid="stHorizontalBlock"]:hover { background:#252525; }
+    div[data-testid="stCheckbox"] { margin:0;padding:0; }
+    div[data-testid="stCheckbox"] label { padding:0; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    COL_W      = [0.4, 0.5, 3.5, 2.5, 1.2, 1.3, 1.8]
+    DIFF_COLOR = {"easy": "#2cbb5d", "medium": "#ffa116", "hard": "#ef4743"}
+
+    # Header
+    for col, lbl in zip(st.columns(COL_W),
+                        ["", "#", "Title", "Topics", "Difficulty", "Acceptance %", "Frequency %"]):
+        col.markdown(
+            f'<span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.6px">{lbl}</span>',
+            unsafe_allow_html=True)
+    st.markdown('<hr style="border:none;border-top:2px solid #3a3a3a;margin:2px 0 0 0">',
+                unsafe_allow_html=True)
+
+    for p in page_problems:
+        pid  = p["ID"]
+        cols = st.columns(COL_W)
+
+        cols[0].checkbox("Solved", value=pid in solved_ids, key=f"cb_{pid}",
+                         label_visibility="collapsed",
+                         on_change=_sync_checkbox, args=(pid,))
+        cols[1].markdown(f'<span style="color:#888;font-size:13px">{pid}</span>',
+                         unsafe_allow_html=True)
+        cols[2].markdown(
+            f'<a href="{p["URL"]}" target="_blank" '
+            f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{p["Title"]}</a>',
+            unsafe_allow_html=True)
+        cols[3].markdown(" ".join(
+            f'<span style="color:{TOPIC_COLORS.get(t,"#64748b")};font-size:11px;'
+            f'border:1px solid {TOPIC_COLORS.get(t,"#64748b")};border-radius:10px;'
+            f'padding:1px 7px;white-space:nowrap">{t}</span>'
+            for t in p["_topics"][:3]), unsafe_allow_html=True)
+        dc = DIFF_COLOR.get(p["Difficulty"].lower(), "#888")
+        cols[4].markdown(
+            f'<span style="color:{dc};border:1px solid {dc};border-radius:12px;'
+            f'padding:2px 10px;font-size:12px;font-weight:600">{p["Difficulty"].capitalize()}</span>',
+            unsafe_allow_html=True)
+        cols[5].markdown(
+            f'<span style="color:#2cbb5d;font-size:13px">{p["Acceptance %"]:.1f}%</span>',
+            unsafe_allow_html=True)
+        pct = min(max(float(p["Frequency %"]), 0), 100)
+        cols[6].markdown(
+            f'<div style="display:flex;align-items:center;gap:6px">'
+            f'<div style="background:#2a2a2a;border-radius:4px;height:6px;width:70px;overflow:hidden">'
+            f'<div style="height:100%;width:{pct}%;background:#ffa116;border-radius:4px"></div></div>'
+            f'<span style="color:#888;font-size:12px">{pct:.0f}%</span></div>',
+            unsafe_allow_html=True)
+
+    # Pagination controls
+    if total_pages > 1:
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        pcol1, pcol2, pcol3 = st.columns([1, 3, 1])
+        if pcol1.button("← Prev", disabled=(page == 0), key="pg_prev"):
+            st.session_state["table_page"] = page - 1
+        pcol2.markdown(
+            f'<div style="text-align:center;color:#888;font-size:13px;padding-top:6px">'
+            f'Page {page + 1} / {total_pages} &nbsp;·&nbsp; '
+            f'{page * PAGE_SIZE + 1}–{min((page + 1) * PAGE_SIZE, total_unique)} of {total_unique}</div>',
+            unsafe_allow_html=True)
+        if pcol3.button("Next →", disabled=(page >= total_pages - 1), key="pg_next"):
+            st.session_state["table_page"] = page + 1
+
 
 # ── Table ─────────────────────────────────────────────────────────────────────
-if "user_id" in st.session_state:
-    # Interactive table with checkboxes via st.data_editor
-    solved_ids = st.session_state["solved_ids"]
-    df = pd.DataFrame([
-        {
-            "✓":           p["ID"] in solved_ids,
-            "#":           p["ID"],
-            "Title":       p["Title"],
-            "URL":         p["URL"],
-            "Topics":      ", ".join(p["_topics"][:3]),
-            "Difficulty":  p["Difficulty"],
-            "Acceptance":  round(p["Acceptance %"], 1),
-            "Frequency":   round(p["Frequency %"], 1),
-        }
-        for p in problems
-    ])
+logged_in = "user_id" in st.session_state
 
-    edited = st.data_editor(
-        df,
-        column_config={
-            "✓":          st.column_config.CheckboxColumn("✓", help="Mark as solved", width="small"),
-            "#":          st.column_config.NumberColumn("#", width="small"),
-            "Title":      st.column_config.LinkColumn("Title", display_text="(.+)", width="large"),
-            "URL":        None,   # hidden — used as link source
-            "Topics":     st.column_config.TextColumn("Topics"),
-            "Difficulty": st.column_config.TextColumn("Difficulty", width="small"),
-            "Acceptance": st.column_config.NumberColumn("Acceptance %", format="%.1f%%", width="small"),
-            "Frequency":  st.column_config.NumberColumn("Frequency %",  format="%.1f%%", width="small"),
-        },
-        disabled=["#", "Title", "URL", "Topics", "Difficulty", "Acceptance", "Frequency"],
-        hide_index=True,
-        use_container_width=True,
-        key="problem_table",
-    )
-
-    # Sync checkbox changes to Turso
-    user_id = st.session_state["user_id"]
-    for _, row in edited.iterrows():
-        pid     = int(row["#"])
-        checked = bool(row["✓"])
-        was     = pid in solved_ids
-        if checked and not was:
-            db.mark_solved(user_id, pid)
-            solved_ids.add(pid)
-        elif not checked and was:
-            db.mark_unsolved(user_id, pid)
-            solved_ids.discard(pid)
-    st.session_state["solved_ids"] = solved_ids
-
+if logged_in:
+    # Reset to page 0 when the filter combination changes
+    filter_key = (company, timeframe, difficulty, topic_filter, search)
+    if st.session_state.get("_last_filter") != filter_key:
+        st.session_state["_last_filter"] = filter_key
+        st.session_state["table_page"] = 0
+    interactive_table(problems)
 else:
-    # Anonymous view — rich HTML table
     rows_html = "".join(
-        f"""<tr>
-          <td class="num">{p["ID"]}</td>
-          <td class="title"><a href="{p["URL"]}" target="_blank">{p["Title"]}</a></td>
-          <td>{topic_chips(p["_topics"])}</td>
-          <td>{difficulty_badge(p["Difficulty"])}</td>
-          <td><span class="acceptance">{p["Acceptance %"]:.1f}%</span></td>
-          <td>{freq_bar(p["Frequency %"])}</td>
-        </tr>"""
+        f'<tr>'
+        f'<td class="num">{p["ID"]}</td>'
+        f'<td class="title"><a href="{p["URL"]}" target="_blank">{p["Title"]}</a></td>'
+        f'<td>{topic_chips(p["_topics"])}</td>'
+        f'<td>{difficulty_badge(p["Difficulty"])}</td>'
+        f'<td><span class="acceptance">{p["Acceptance %"]:.1f}%</span></td>'
+        f'<td>{freq_bar(p["Frequency %"])}</td>'
+        '</tr>'
         for p in problems
     )
-
     st.html(TABLE_CSS + f"""
 <table class="lc-table">
   <thead><tr>
@@ -264,3 +344,4 @@ else:
 
 if total == 0:
     st.info("No problems match your filters.")
+
