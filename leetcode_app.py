@@ -97,7 +97,7 @@ db = get_db()
 
 st.markdown(
     '<div class="lc-header">'
-    '<div class="lc-logo">beet<span>code</span></div>'
+    '<div class="lc-logo">🐝 beet<span>code</span></div>'
     '<div style="color:#888;font-size:14px;">Company-wise Interview Questions</div>'
     '</div>',
     unsafe_allow_html=True,
