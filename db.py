@@ -136,15 +136,19 @@ class TursoDB:
     # ── Domain queries ─────────────────────────────────────────────────────────
 
     def get_companies(self) -> list[str]:
-        return [self._val(r[0]) for r in self.rows("SELECT name FROM companies ORDER BY name")]
+        return ["All"] + [self._val(r[0]) for r in self.rows("SELECT name FROM companies ORDER BY name")]
 
     def get_topics(self) -> list[str]:
         return [self._val(r[0]) for r in self.rows("SELECT name FROM topics ORDER BY name")]
 
     def query_problems(self, company: str, timeframe: str,
                        difficulty: str, topic: str, search: str) -> list[dict]:
-        where = ["c.name = ?", "cp.timeframe = ?"]
-        args: list = [company, timeframe]
+        where = ["cp.timeframe = ?"]
+        args: list = [timeframe]
+
+        if company and company != "All":
+            where.append("c.name = ?")
+            args.append(company)
 
         if difficulty and difficulty != "All":
             where.append("p.difficulty = ?")

@@ -1,6 +1,5 @@
 import streamlit as st
-from db   import TursoDB
-from seed import seed
+from db import TursoDB
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="LeetCode Company Questions", page_icon="💻", layout="wide")
@@ -106,27 +105,18 @@ st.markdown(
 
 # ── Gate: DB not seeded ───────────────────────────────────────────────────────
 if not db.is_seeded():
-    st.warning("Database is empty. Click below to load all company problems and topic tags.")
-    if st.button("Initialize Database", type="primary"):
-        bar      = st.progress(0, text="Starting …")
-        info     = st.empty()
-
-        def on_progress(step: str, pct: float):
-            bar.progress(pct, text=step)
-            info.info(step)
-
-        seed(db, progress_cb=on_progress)
-        st.success("Done! Reloading …")
-        st.cache_resource.clear()
-        st.rerun()
+    st.error(
+        "Database is empty. Run the seeder locally to populate it:\n\n"
+        "```bash\npython seed.py\n```\n\n"
+        "The deployed app reads from Turso — once seeded locally, it will work here too."
+    )
     st.stop()
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### Filters")
-    companies    = db.get_companies()
-    company      = st.selectbox("Company", companies,
-                                index=companies.index("amazon") if "amazon" in companies else 0)
+    companies = db.get_companies()
+    company   = st.selectbox("Company", companies, index=0)
     timeframe    = st.selectbox("Timeframe", list(TIMEFRAME_KEYS.keys()))
     difficulty   = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"])
     topic_filter = st.selectbox("Topic", ["All"] + db.get_topics())
@@ -138,11 +128,7 @@ with st.sidebar:
         st.caption(f"{table}: {count:,}")
 
     st.markdown("---")
-    if st.button("Re-seed database"):
-        db.drop_all()
-        db.init_schema()
-        st.cache_resource.clear()
-        st.rerun()
+    st.caption("To refresh data, run `python seed.py --reset` locally.")
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 problems = db.query_problems(
@@ -162,7 +148,7 @@ st.markdown(f"""
   <div class="stat-item"><div class="stat-num" style="color:#ffa116">{medium_n}</div><div class="stat-lbl">Medium</div></div>
   <div class="stat-item"><div class="stat-num" style="color:#ef4743">{hard_n}</div><div class="stat-lbl">Hard</div></div>
   <div class="stat-item" style="margin-left:auto;">
-    <div class="stat-num" style="color:#ffa116;font-size:16px;">{company.upper()}</div>
+    <div class="stat-num" style="color:#ffa116;font-size:16px;">{"ALL COMPANIES" if company == "All" else company.upper()}</div>
     <div class="stat-lbl">{timeframe}</div>
   </div>
 </div>
