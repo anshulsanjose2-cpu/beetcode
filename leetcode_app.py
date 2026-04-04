@@ -8,7 +8,7 @@ st.markdown("""
 <style>
 html, body, [class*="css"] { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
 .lc-header { display:flex;align-items:center;gap:12px;padding:16px 0 24px 0;border-bottom:1px solid #3a3a3a;margin-bottom:24px; }
-.lc-logo   { font-size:28px;font-weight:800;color:#ffa116;letter-spacing:-1px; }
+.lc-logo   { font-size:28px;font-weight:800;color:#FFD700;letter-spacing:-1px; }
 .lc-logo span { color:#ffffff; }
 .stats-bar { display:flex;gap:24px;padding:12px 16px;background:#282828;border-radius:8px;margin-bottom:20px; }
 .stat-item { text-align:center; }
