@@ -125,11 +125,23 @@ def solution_dialog(p: dict) -> None:
     else:
         code = st_ace(value=saved, auto_update=True,
                       placeholder="# Paste your Python solution here…", **_ace_kwargs)
-        if st.button("💾 Save", type="primary", key=f"dlg_save_{pid}"):
+        bcol1, bcol2 = st.columns([1, 1])
+        if bcol1.button("💾 Save", type="primary", key=f"dlg_save_{pid}"):
             db.save_solution(user_id, pid, code or "")
             sol_ids = st.session_state.get("solution_ids", set())
             sol_ids.add(pid)
             st.session_state["solution_ids"] = sol_ids
+            st.rerun()
+        if bcol2.button("✅ Save & Mark Done", key=f"dlg_save_done_{pid}"):
+            db.save_solution(user_id, pid, code or "")
+            db.mark_solved(user_id, pid)
+            sol_ids = st.session_state.get("solution_ids", set())
+            sol_ids.add(pid)
+            st.session_state["solution_ids"] = sol_ids
+            solved_ids = st.session_state.get("solved_ids", set())
+            solved_ids.add(pid)
+            st.session_state["solved_ids"] = solved_ids
+            st.session_state[f"cb_{pid}"] = True
             st.rerun()
 
 def _sync_checkbox(pid: int) -> None:
