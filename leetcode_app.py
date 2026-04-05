@@ -88,7 +88,7 @@ def topic_chips(topics: list[str]) -> str:
     return " ".join(
         f'<span class="topic-chip" style="border-color:{TOPIC_COLORS.get(t,"#64748b")};'
         f'color:{TOPIC_COLORS.get(t,"#64748b")}">{t}</span>'
-        for t in topics[:3]
+        for t in topics
     )
 
 def freq_bar(val: float) -> str:
@@ -345,7 +345,7 @@ def interactive_table(problems):
             f'<span style="color:{TOPIC_COLORS.get(t,"#64748b")};font-size:11px;'
             f'border:1px solid {TOPIC_COLORS.get(t,"#64748b")};border-radius:10px;'
             f'padding:1px 7px;white-space:nowrap">{t}</span>'
-            for t in p["_topics"][:3]), unsafe_allow_html=True)
+            for t in p["_topics"]), unsafe_allow_html=True)
         dc = DIFF_COLOR.get(p["Difficulty"].lower(), "#888")
         cols[4].markdown(
             f'<span style="color:{dc};border:1px solid {dc};border-radius:12px;'
