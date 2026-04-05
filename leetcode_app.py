@@ -5,18 +5,6 @@ from db import TursoDB
 st.set_page_config(page_title="Beetcode", page_icon="🐝", layout="wide")
 
 st.markdown("""
-<script>
-document.addEventListener('click', function(e) {
-    var btn = e.target.closest('.copy-btn');
-    if (!btn) return;
-    navigator.clipboard.writeText(btn.dataset.title).then(function() {
-        var orig = btn.textContent;
-        btn.textContent = '✓';
-        btn.style.color = '#2cbb5d';
-        setTimeout(function(){ btn.textContent = orig; btn.style.color = ''; }, 1200);
-    });
-});
-</script>
 <style>
 html, body, [class*="css"] { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
 .lc-header { display:flex;align-items:center;gap:12px;padding:16px 0 24px 0;border-bottom:1px solid #3a3a3a;margin-bottom:24px; }
@@ -399,6 +387,36 @@ def interactive_table(problems):
         if pcol3.button("Next →", disabled=(page >= total_pages - 1), key="pg_next"):
             st.session_state["table_page"] = page + 1
 
+
+# ── Copy-to-clipboard JS (injected via iframe to bypass Streamlit sanitization)
+import streamlit.components.v1 as components
+components.html("""
+<script>
+(function() {
+    function setup() {
+        var doc = window.parent.document;
+        doc.addEventListener('click', function(e) {
+            var btn = e.target.closest('.copy-btn');
+            if (!btn) return;
+            var title = btn.getAttribute('data-title');
+            var ta = doc.createElement('textarea');
+            ta.value = title;
+            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+            doc.body.appendChild(ta);
+            ta.focus(); ta.select();
+            doc.execCommand('copy');
+            doc.body.removeChild(ta);
+            var orig = btn.textContent;
+            btn.textContent = '✓';
+            btn.style.color = '#2cbb5d';
+            setTimeout(function(){ btn.textContent = orig; btn.style.color = ''; }, 1200);
+        });
+    }
+    if (document.readyState === 'complete') setup();
+    else window.addEventListener('load', setup);
+})();
+</script>
+""", height=0)
 
 # ── Table ─────────────────────────────────────────────────────────────────────
 logged_in = "user_id" in st.session_state
