@@ -96,6 +96,39 @@ def freq_bar(val: float) -> str:
     return (f'<div class="freq-bar-wrap"><div class="freq-bar" style="width:{pct}%"></div></div>'
             f' <span style="color:#888;font-size:12px">{pct:.0f}%</span>')
 
+@st.dialog("Solution", width="large")
+def solution_dialog(p: dict) -> None:
+    pid     = p["ID"]
+    user_id = st.session_state["user_id"]
+    st.markdown(
+        f'**[{p["Title"]}]({p["URL"]})**  '
+        f'<span style="color:#888;font-size:13px">— {p["Difficulty"]}</span>',
+        unsafe_allow_html=True,
+    )
+    saved = db.get_solution(user_id, pid)
+    mode  = st.radio("", ["View", "Edit"], horizontal=True, label_visibility="collapsed",
+                     key=f"dlg_mode_{pid}")
+
+    from streamlit_ace import st_ace
+    _ace_kwargs = dict(
+        language="python", theme="tomorrow_night",
+        font_size=13, tab_size=4,
+        show_gutter=True, show_print_margin=False,
+        height=420,
+    )
+
+    if mode == "View":
+        if saved:
+            st_ace(value=saved, readonly=True, **_ace_kwargs)
+        else:
+            st.caption("No solution saved yet. Switch to Edit to add one.")
+    else:
+        code = st_ace(value=saved, auto_update=True,
+                      placeholder="# Paste your Python solution here…", **_ace_kwargs)
+        if st.button("💾 Save", type="primary", key=f"dlg_save_{pid}"):
+            db.save_solution(user_id, pid, code or "")
+            st.toast("Saved!", icon="💾")
+
 def _sync_checkbox(pid: int) -> None:
     """on_change callback: write only the changed checkbox to DB."""
     user_id    = st.session_state["user_id"]
@@ -249,12 +282,12 @@ def interactive_table(problems):
     </style>
     """, unsafe_allow_html=True)
 
-    COL_W      = [0.4, 0.5, 3.5, 2.5, 1.2, 1.3, 1.8]
+    COL_W      = [0.4, 0.5, 3.5, 2.5, 1.2, 1.3, 1.8, 0.9]
     DIFF_COLOR = {"easy": "#2cbb5d", "medium": "#ffa116", "hard": "#ef4743"}
 
     # Header
     for col, lbl in zip(st.columns(COL_W),
-                        ["", "#", "Title", "Topics", "Difficulty", "Acceptance %", "Frequency %"]):
+                        ["", "#", "Title", "Topics", "Difficulty", "Acceptance %", "Frequency %", "Solution"]):
         col.markdown(
             f'<span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.6px">{lbl}</span>',
             unsafe_allow_html=True)
@@ -294,6 +327,8 @@ def interactive_table(problems):
             f'<div style="height:100%;width:{pct}%;background:#ffa116;border-radius:4px"></div></div>'
             f'<span style="color:#888;font-size:12px">{pct:.0f}%</span></div>',
             unsafe_allow_html=True)
+        if cols[7].button("📝", key=f"sol_{pid}", help="View/edit solution"):
+            solution_dialog(p)
 
     # Pagination controls
     if total_pages > 1:
