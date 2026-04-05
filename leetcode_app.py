@@ -5,6 +5,18 @@ from db import TursoDB
 st.set_page_config(page_title="Beetcode", page_icon="🐝", layout="wide")
 
 st.markdown("""
+<script>
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    navigator.clipboard.writeText(btn.dataset.title).then(function() {
+        var orig = btn.textContent;
+        btn.textContent = '✓';
+        btn.style.color = '#2cbb5d';
+        setTimeout(function(){ btn.textContent = orig; btn.style.color = ''; }, 1200);
+    });
+});
+</script>
 <style>
 html, body, [class*="css"] { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
 .lc-header { display:flex;align-items:center;gap:12px;padding:16px 0 24px 0;border-bottom:1px solid #3a3a3a;margin-bottom:24px; }
@@ -340,12 +352,11 @@ def interactive_table(problems):
                          on_change=_sync_checkbox, args=(pid,))
         cols[1].markdown(f'<span style="color:#888;font-size:13px">{pid}</span>',
                          unsafe_allow_html=True)
-        safe_title = p["Title"].replace("'", "\\'")
+        safe_title = p["Title"].replace('"', '&quot;')
         cols[2].markdown(
             f'<a href="{p["URL"]}" target="_blank" '
             f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{p["Title"]}</a>'
-            f'<span onclick="navigator.clipboard.writeText(\'{safe_title}\')" '
-            f'title="Copy title" '
+            f'<span class="copy-btn" data-title="{safe_title}" title="Copy title" '
             f'style="cursor:pointer;margin-left:6px;color:#555;font-size:11px;'
             f'user-select:none;vertical-align:middle">⧉</span>',
             unsafe_allow_html=True)
