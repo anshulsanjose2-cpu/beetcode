@@ -185,7 +185,7 @@ class TursoDB:
         sql = f"""
             SELECT p.id, p.slug, p.title, p.url, p.difficulty,
                    cp.acceptance_pct, cp.frequency_pct,
-                   GROUP_CONCAT(t.name, '|||') AS topics
+                   GROUP_CONCAT(DISTINCT t.name) AS topics
             FROM company_problems cp
             JOIN problems  p ON p.id  = cp.problem_id
             JOIN companies c ON c.id  = cp.company_id
@@ -204,7 +204,7 @@ class TursoDB:
                 "Difficulty":   self._val(r[4]) or "",
                 "Acceptance %": self._val(r[5]) or 0.0,
                 "Frequency %":  self._val(r[6]) or 0.0,
-                "_topics":      [t for t in (self._val(r[7]) or "").split("|||") if t],
+                "_topics":      list(dict.fromkeys(t for t in (self._val(r[7]) or "").split(",") if t)),
             }
             for r in self.rows(sql, args)
         ]
