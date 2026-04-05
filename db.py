@@ -261,6 +261,10 @@ class TursoDB:
             [user_id, problem_id, code],
         )])
 
+    def get_solution_ids(self, user_id: int) -> set[int]:
+        return {self._val(r[0]) for r in
+                self.rows("SELECT problem_id FROM user_solutions WHERE user_id = ? AND code != ''", [user_id])}
+
     def get_solution(self, user_id: int, problem_id: int) -> str:
         return self.scalar(
             "SELECT code FROM user_solutions WHERE user_id = ? AND problem_id = ?",

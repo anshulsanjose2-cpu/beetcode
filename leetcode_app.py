@@ -127,6 +127,9 @@ def solution_dialog(p: dict) -> None:
                       placeholder="# Paste your Python solution here…", **_ace_kwargs)
         if st.button("💾 Save", type="primary", key=f"dlg_save_{pid}"):
             db.save_solution(user_id, pid, code or "")
+            sol_ids = st.session_state.get("solution_ids", set())
+            sol_ids.add(pid)
+            st.session_state["solution_ids"] = sol_ids
             st.toast("Saved!", icon="💾")
 
 def _sync_checkbox(pid: int) -> None:
@@ -277,7 +280,10 @@ st.markdown(f"""
 # ── Interactive table fragment (only this section reruns on checkbox click) ────
 @st.fragment
 def interactive_table(problems):
-    solved_ids = st.session_state.get("solved_ids", set())
+    solved_ids   = st.session_state.get("solved_ids", set())
+    user_id      = st.session_state["user_id"]
+    solution_ids = st.session_state.get("solution_ids") or db.get_solution_ids(user_id)
+    st.session_state["solution_ids"] = solution_ids
 
     # Progress bar
     unique_ids   = {p["ID"] for p in problems}
@@ -358,7 +364,9 @@ def interactive_table(problems):
             f'<div style="height:100%;width:{pct}%;background:#ffa116;border-radius:4px"></div></div>'
             f'<span style="color:#888;font-size:12px">{pct:.0f}%</span></div>',
             unsafe_allow_html=True)
-        if cols[7].button("📝", key=f"sol_{pid}", help="View/edit solution"):
+        has_solution = pid in solution_ids
+        label = "✅" if has_solution else "📝"
+        if cols[7].button(label, key=f"sol_{pid}", help="Solution saved" if has_solution else "Add solution"):
             solution_dialog(p)
 
     # Pagination controls
