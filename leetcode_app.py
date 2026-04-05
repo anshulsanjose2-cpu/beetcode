@@ -244,10 +244,16 @@ with st.sidebar:
     st.markdown("---")
     st.caption("To refresh data, run `python seed.py --reset` locally.")
 
-# ── Query ─────────────────────────────────────────────────────────────────────
-problems = db.query_problems(
+# ── Query (deduplicated by problem ID) ────────────────────────────────────────
+_raw = db.query_problems(
     company_sel, TIMEFRAME_KEYS[timeframe], diff_sel, topic_sel, search
 )
+seen = set()
+problems = []
+for p in _raw:
+    if p["ID"] not in seen:
+        seen.add(p["ID"])
+        problems.append(p)
 
 # ── Stats bar ─────────────────────────────────────────────────────────────────
 total    = len(problems)
@@ -272,15 +278,6 @@ st.markdown(f"""
 @st.fragment
 def interactive_table(problems):
     solved_ids = st.session_state.get("solved_ids", set())
-
-    # Deduplicate by problem ID (same problem can appear for multiple companies)
-    seen = set()
-    unique_problems = []
-    for p in problems:
-        if p["ID"] not in seen:
-            seen.add(p["ID"])
-            unique_problems.append(p)
-    problems = unique_problems
 
     # Progress bar
     unique_ids   = {p["ID"] for p in problems}
