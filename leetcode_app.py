@@ -205,12 +205,31 @@ with st.sidebar:
 
     # ── Filters ───────────────────────────────────────────────────────────────
     st.markdown("### Filters")
-    companies = db.get_companies()
-    company      = st.selectbox("Company", companies, index=0)
-    timeframe    = st.selectbox("Timeframe", list(TIMEFRAME_KEYS.keys()))
-    difficulty   = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"])
-    topic_filter = st.selectbox("Topic", ["All"] + db.get_topics())
-    search       = st.text_input("Search by title", placeholder="e.g. Two Sum")
+    qp = st.query_params
+    companies    = db.get_companies()
+    topics_list  = ["All"] + db.get_topics()
+    tf_keys      = list(TIMEFRAME_KEYS.keys())
+
+    company      = st.selectbox("Company",    companies,
+                                index=companies.index(qp.get("company", "All"))
+                                      if qp.get("company", "All") in companies else 0)
+    timeframe    = st.selectbox("Timeframe",  tf_keys,
+                                index=tf_keys.index(qp.get("timeframe", tf_keys[0]))
+                                      if qp.get("timeframe", tf_keys[0]) in tf_keys else 0)
+    difficulty   = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"],
+                                index=["All","Easy","Medium","Hard"].index(qp.get("difficulty","All"))
+                                      if qp.get("difficulty","All") in ["All","Easy","Medium","Hard"] else 0)
+    topic_filter = st.selectbox("Topic",      topics_list,
+                                index=topics_list.index(qp.get("topic","All"))
+                                      if qp.get("topic","All") in topics_list else 0)
+    search       = st.text_input("Search by title", value=qp.get("search", ""),
+                                 placeholder="e.g. Two Sum")
+
+    # Sync filters back to URL
+    st.query_params.update({
+        "company": company, "timeframe": timeframe,
+        "difficulty": difficulty, "topic": topic_filter, "search": search,
+    })
 
     st.markdown("---")
     st.caption("**DB stats**")
