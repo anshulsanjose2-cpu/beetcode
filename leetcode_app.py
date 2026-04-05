@@ -67,7 +67,7 @@ body { background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Sego
 """
 
 # ── DB connection (cached per schema version so deploys bust the cache) ──────
-_SCHEMA_VERSION = "v4"   # bump this whenever db.py schema changes
+_SCHEMA_VERSION = "v5"   # bump this whenever db.py schema changes
 
 @st.cache_resource
 def get_db(_v: str = _SCHEMA_VERSION) -> TursoDB:
