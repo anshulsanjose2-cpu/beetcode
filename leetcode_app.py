@@ -130,7 +130,7 @@ def solution_dialog(p: dict) -> None:
             sol_ids = st.session_state.get("solution_ids", set())
             sol_ids.add(pid)
             st.session_state["solution_ids"] = sol_ids
-            st.toast("Saved!", icon="💾")
+            st.rerun()
 
 def _sync_checkbox(pid: int) -> None:
     """on_change callback: write only the changed checkbox to DB."""
