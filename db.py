@@ -178,17 +178,6 @@ class TursoDB:
             vals = ", ".join(_quote(c) for c in companies)
             where.append(f"LOWER(c.name) IN ({vals})")
 
-        if difficulties:
-            vals = ", ".join(_quote(d) for d in difficulties)
-            where.append(f"LOWER(p.difficulty) IN ({vals})")
-
-        if topics:
-            vals = ", ".join(_quote(t) for t in topics)
-            where.append(f"""p.id IN (
-                SELECT pt2.problem_id FROM problem_topics pt2
-                JOIN topics t2 ON t2.id = pt2.topic_id
-                WHERE LOWER(t2.name) IN ({vals}))""")
-
         if search and search.strip():
             where.append("p.title LIKE ?")
             args.append(f"%{search.strip()}%")
@@ -206,7 +195,7 @@ class TursoDB:
             GROUP BY p.id, cp.acceptance_pct, cp.frequency_pct
             ORDER BY cp.frequency_pct DESC
         """
-        return [
+        rows = [
             {
                 "ID":           self._val(r[0]),
                 "slug":         self._val(r[1]) or "",
@@ -219,6 +208,15 @@ class TursoDB:
             }
             for r in self.rows(sql, args)
         ]
+        if difficulties:
+            diff_set = {d.lower() for d in difficulties}
+            rows = [r for r in rows if r["Difficulty"].lower() in diff_set]
+
+        if topics:
+            topic_set = {t.lower() for t in topics}
+            rows = [r for r in rows
+                    if any(t.lower() in topic_set for t in r["_topics"])]
+        return rows
 
     def stats(self) -> dict[str, int]:
         return {
