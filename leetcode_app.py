@@ -340,9 +340,14 @@ def interactive_table(problems):
                          on_change=_sync_checkbox, args=(pid,))
         cols[1].markdown(f'<span style="color:#888;font-size:13px">{pid}</span>',
                          unsafe_allow_html=True)
+        safe_title = p["Title"].replace("'", "\\'")
         cols[2].markdown(
             f'<a href="{p["URL"]}" target="_blank" '
-            f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{p["Title"]}</a>',
+            f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{p["Title"]}</a>'
+            f'<span onclick="navigator.clipboard.writeText(\'{safe_title}\')" '
+            f'title="Copy title" '
+            f'style="cursor:pointer;margin-left:6px;color:#555;font-size:11px;'
+            f'user-select:none;vertical-align:middle">⧉</span>',
             unsafe_allow_html=True)
         cols[3].markdown(" ".join(
             f'<span style="color:{TOPIC_COLORS.get(t,"#64748b")};font-size:11px;'
