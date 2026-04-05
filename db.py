@@ -261,6 +261,47 @@ class TursoDB:
             [user_id, problem_id, code],
         )])
 
+    # ── Custom problem insertion ──────────────────────────────────────────────
+
+    def add_custom_problem(self, title: str, url: str, difficulty: str,
+                           company: str, timeframe: str, topics: list[str]) -> int:
+        """Insert a custom problem and return its problem_id."""
+        slug = "custom-" + title.lower().replace(" ", "-")[:40]
+
+        # Upsert problem
+        self._run([self._stmt(
+            "INSERT OR IGNORE INTO problems (slug, title, difficulty, url) VALUES (?, ?, ?, ?)",
+            [slug, title, difficulty, url]
+        )])
+        pid = int(self.scalar("SELECT id FROM problems WHERE slug = ?", [slug]))
+
+        # Upsert company
+        self._run([self._stmt(
+            "INSERT OR IGNORE INTO companies (name) VALUES (?)", [company]
+        )])
+        cid = int(self.scalar("SELECT id FROM companies WHERE name = ?", [company]))
+
+        # Upsert company_problems
+        self._run([self._stmt(
+            """INSERT OR IGNORE INTO company_problems
+               (company_id, problem_id, timeframe, acceptance_pct, frequency_pct)
+               VALUES (?, ?, ?, 0, 0)""",
+            [cid, pid, timeframe]
+        )])
+
+        # Upsert topics
+        for topic in topics:
+            self._run([self._stmt(
+                "INSERT OR IGNORE INTO topics (name) VALUES (?)", [topic]
+            )])
+            tid = int(self.scalar("SELECT id FROM topics WHERE name = ?", [topic]))
+            self._run([self._stmt(
+                "INSERT OR IGNORE INTO problem_topics (problem_id, topic_id) VALUES (?, ?)",
+                [pid, tid]
+            )])
+
+        return pid
+
     def get_solution_ids(self, user_id: int) -> set[int]:
         return {self._val(r[0]) for r in
                 self.rows("SELECT problem_id FROM user_solutions WHERE user_id = ? AND code != ''", [user_id])}

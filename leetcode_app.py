@@ -96,6 +96,28 @@ def freq_bar(val: float) -> str:
     return (f'<div class="freq-bar-wrap"><div class="freq-bar" style="width:{pct}%"></div></div>'
             f' <span style="color:#888;font-size:12px">{pct:.0f}%</span>')
 
+@st.dialog("Add Custom Problem", width="large")
+def add_problem_dialog() -> None:
+    st.caption("Add a problem not in the database — it will appear in your filtered results.")
+    title      = st.text_input("Title *", placeholder="e.g. LRU Cache")
+    url        = st.text_input("LeetCode URL", placeholder="https://leetcode.com/problems/lru-cache/")
+    difficulty = st.selectbox("Difficulty *", ["Easy", "Medium", "Hard"])
+    company    = st.text_input("Company *", placeholder="e.g. Google")
+    timeframe  = st.selectbox("Timeframe *", list(TIMEFRAME_KEYS.keys()))
+    all_topics = db.get_topics()
+    topics     = st.multiselect("Topics", all_topics)
+
+    if st.button("➕ Add Problem", type="primary"):
+        if not title.strip() or not company.strip():
+            st.error("Title and Company are required.")
+        else:
+            db.add_custom_problem(
+                title.strip(), url.strip() or "#",
+                difficulty, company.strip(),
+                TIMEFRAME_KEYS[timeframe], topics
+            )
+            st.rerun()
+
 @st.dialog("Solution", width="large")
 def solution_dialog(p: dict) -> None:
     pid     = p["ID"]
@@ -258,6 +280,9 @@ with st.sidebar:
         st.caption(f"{table}: {count:,}")
 
     st.markdown("---")
+    if "user_id" in st.session_state:
+        if st.button("➕ Add Problem", use_container_width=True):
+            add_problem_dialog()
     st.caption("To refresh data, run `python seed.py --reset` locally.")
 
 # ── Query (deduplicated by problem ID) ────────────────────────────────────────
