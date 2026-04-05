@@ -166,25 +166,28 @@ class TursoDB:
     def get_topics(self) -> list[str]:
         return [self._val(r[0]) for r in self.rows("SELECT name FROM topics ORDER BY name")]
 
-    def query_problems(self, company: str, timeframe: str,
-                       difficulty: str, topic: str, search: str) -> list[dict]:
+    def query_problems(self, companies: list[str], timeframe: str,
+                       difficulties: list[str], topics: list[str], search: str) -> list[dict]:
         where = ["cp.timeframe = ?"]
         args: list = [timeframe]
 
-        if company and company != "All":
-            where.append("c.name = ?")
-            args.append(company)
+        if companies:
+            placeholders = ",".join("?" * len(companies))
+            where.append(f"c.name IN ({placeholders})")
+            args.extend(companies)
 
-        if difficulty and difficulty != "All":
-            where.append("p.difficulty = ?")
-            args.append(difficulty)
+        if difficulties:
+            placeholders = ",".join("?" * len(difficulties))
+            where.append(f"p.difficulty IN ({placeholders})")
+            args.extend(difficulties)
 
-        if topic and topic not in ("All", ""):
-            where.append("""p.id IN (
+        if topics:
+            placeholders = ",".join("?" * len(topics))
+            where.append(f"""p.id IN (
                 SELECT pt2.problem_id FROM problem_topics pt2
                 JOIN topics t2 ON t2.id = pt2.topic_id
-                WHERE t2.name = ?)""")
-            args.append(topic)
+                WHERE t2.name IN ({placeholders}))""")
+            args.extend(topics)
 
         if search and search.strip():
             where.append("p.title LIKE ?")

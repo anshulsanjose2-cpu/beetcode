@@ -205,30 +205,35 @@ with st.sidebar:
 
     # ── Filters ───────────────────────────────────────────────────────────────
     st.markdown("### Filters")
-    qp = st.query_params
-    companies    = db.get_companies()
-    topics_list  = ["All"] + db.get_topics()
-    tf_keys      = list(TIMEFRAME_KEYS.keys())
+    qp           = st.query_params
+    all_companies = [c for c in db.get_companies() if c != "All"]
+    all_topics    = db.get_topics()
+    tf_keys       = list(TIMEFRAME_KEYS.keys())
 
-    company      = st.selectbox("Company",    companies,
-                                index=companies.index(qp.get("company", "All"))
-                                      if qp.get("company", "All") in companies else 0)
+    # Restore multiselect defaults from URL (comma-separated)
+    def _qp_list(key, valid):
+        raw = qp.get(key, "")
+        return [v for v in raw.split(",") if v in valid] if raw else []
+
+    company_sel  = st.multiselect("Company",    all_companies,
+                                  default=_qp_list("company", all_companies))
     timeframe    = st.selectbox("Timeframe",  tf_keys,
                                 index=tf_keys.index(qp.get("timeframe", tf_keys[0]))
                                       if qp.get("timeframe", tf_keys[0]) in tf_keys else 0)
-    difficulty   = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"],
-                                index=["All","Easy","Medium","Hard"].index(qp.get("difficulty","All"))
-                                      if qp.get("difficulty","All") in ["All","Easy","Medium","Hard"] else 0)
-    topic_filter = st.selectbox("Topic",      topics_list,
-                                index=topics_list.index(qp.get("topic","All"))
-                                      if qp.get("topic","All") in topics_list else 0)
+    diff_sel     = st.multiselect("Difficulty", ["Easy", "Medium", "Hard"],
+                                  default=_qp_list("difficulty", ["Easy","Medium","Hard"]))
+    topic_sel    = st.multiselect("Topic",      all_topics,
+                                  default=_qp_list("topic", all_topics))
     search       = st.text_input("Search by title", value=qp.get("search", ""),
                                  placeholder="e.g. Two Sum")
 
     # Sync filters back to URL
     st.query_params.update({
-        "company": company, "timeframe": timeframe,
-        "difficulty": difficulty, "topic": topic_filter, "search": search,
+        "company":    ",".join(company_sel),
+        "timeframe":  timeframe,
+        "difficulty": ",".join(diff_sel),
+        "topic":      ",".join(topic_sel),
+        "search":     search,
     })
 
     st.markdown("---")
@@ -241,7 +246,7 @@ with st.sidebar:
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 problems = db.query_problems(
-    company, TIMEFRAME_KEYS[timeframe], difficulty, topic_filter, search
+    company_sel, TIMEFRAME_KEYS[timeframe], diff_sel, topic_sel, search
 )
 
 # ── Stats bar ─────────────────────────────────────────────────────────────────
@@ -257,7 +262,7 @@ st.markdown(f"""
   <div class="stat-item"><div class="stat-num" style="color:#ffa116">{medium_n}</div><div class="stat-lbl">Medium</div></div>
   <div class="stat-item"><div class="stat-num" style="color:#ef4743">{hard_n}</div><div class="stat-lbl">Hard</div></div>
   <div class="stat-item" style="margin-left:auto;">
-    <div class="stat-num" style="color:#ffa116;font-size:16px;">{"ALL COMPANIES" if company == "All" else company.upper()}</div>
+    <div class="stat-num" style="color:#ffa116;font-size:16px;">{", ".join(company_sel).upper() if company_sel else "ALL COMPANIES"}</div>
     <div class="stat-lbl">{timeframe}</div>
   </div>
 </div>
@@ -379,7 +384,7 @@ logged_in = "user_id" in st.session_state
 
 if logged_in:
     # Reset to page 0 when the filter combination changes
-    filter_key = (company, timeframe, difficulty, topic_filter, search)
+    filter_key = (tuple(company_sel), timeframe, tuple(diff_sel), tuple(topic_sel), search)
     if st.session_state.get("_last_filter") != filter_key:
         st.session_state["_last_filter"] = filter_key
         st.session_state["table_page"] = 0
