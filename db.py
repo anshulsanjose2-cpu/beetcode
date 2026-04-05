@@ -171,23 +171,23 @@ class TursoDB:
         where = ["cp.timeframe = ?"]
         args: list = [timeframe]
 
+        def _quote(v: str) -> str:
+            return "'" + v.lower().replace("'", "''") + "'"
+
         if companies:
-            conds = " OR ".join("LOWER(c.name) = ?" for _ in companies)
-            where.append(f"({conds})")
-            args.extend([c.lower() for c in companies])
+            vals = ", ".join(_quote(c) for c in companies)
+            where.append(f"LOWER(c.name) IN ({vals})")
 
         if difficulties:
-            conds = " OR ".join("LOWER(p.difficulty) = ?" for _ in difficulties)
-            where.append(f"({conds})")
-            args.extend([d.lower() for d in difficulties])
+            vals = ", ".join(_quote(d) for d in difficulties)
+            where.append(f"LOWER(p.difficulty) IN ({vals})")
 
         if topics:
-            conds = " OR ".join("LOWER(t2.name) = ?" for _ in topics)
+            vals = ", ".join(_quote(t) for t in topics)
             where.append(f"""p.id IN (
                 SELECT pt2.problem_id FROM problem_topics pt2
                 JOIN topics t2 ON t2.id = pt2.topic_id
-                WHERE {conds})""")
-            args.extend([t.lower() for t in topics])
+                WHERE LOWER(t2.name) IN ({vals}))""")
 
         if search and search.strip():
             where.append("p.title LIKE ?")
