@@ -163,6 +163,15 @@ if not db.is_seeded():
     )
     st.stop()
 
+# ── Auto-restore session from URL query param ─────────────────────────────────
+if "user_id" not in st.session_state:
+    qp_user = st.query_params.get("user", "")
+    if qp_user:
+        uid = db.create_or_get_user(qp_user)
+        st.session_state["user_id"]    = uid
+        st.session_state["username"]   = qp_user
+        st.session_state["solved_ids"] = db.get_solved_ids(uid)
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     # ── User section ──────────────────────────────────────────────────────────
@@ -173,12 +182,12 @@ with st.sidebar:
             uname = username_input.strip()
             if uname:
                 uid = db.create_or_get_user(uname)
-                # Clear stale checkbox state from any previous session
                 for k in [k for k in st.session_state if k.startswith("cb_")]:
                     del st.session_state[k]
                 st.session_state["user_id"]    = uid
                 st.session_state["username"]   = uname
                 st.session_state["solved_ids"] = db.get_solved_ids(uid)
+                st.query_params["user"] = uname
                 st.rerun()
             else:
                 st.warning("Please enter a username.")
@@ -189,6 +198,7 @@ with st.sidebar:
                 del st.session_state[k]
             for k in ("user_id", "username", "solved_ids"):
                 st.session_state.pop(k, None)
+            st.query_params.clear()
             st.rerun()
 
     st.markdown("---")
