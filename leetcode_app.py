@@ -433,29 +433,7 @@ components.html("""
 
 # ── Confetti ──────────────────────────────────────────────────────────────────
 if st.session_state.pop("fire_confetti", False):
-    components.html("""
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script>
-(function() {
-    function fire() {
-        var confetti = window.parent.confetti || window.confetti;
-        if (!confetti) {
-            // load into parent if not already there
-            var s = window.parent.document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js';
-            s.onload = function() { burst(window.parent.confetti); };
-            window.parent.document.head.appendChild(s);
-        } else {
-            burst(confetti);
-        }
-    }
-    function burst(fn) {
-        fn({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#2cbb5d','#ffa116','#ffffff','#ef4743'] });
-    }
-    fire();
-})();
-</script>
-""", height=0)
+    st.balloons()
 
 # ── Table ─────────────────────────────────────────────────────────────────────
 logged_in = "user_id" in st.session_state
