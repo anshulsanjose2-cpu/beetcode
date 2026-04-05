@@ -172,21 +172,21 @@ class TursoDB:
         args: list = [timeframe]
 
         if companies:
-            placeholders = ",".join("?" * len(companies))
-            where.append(f"LOWER(c.name) IN ({placeholders})")
+            conds = " OR ".join("LOWER(c.name) = ?" for _ in companies)
+            where.append(f"({conds})")
             args.extend([c.lower() for c in companies])
 
         if difficulties:
-            placeholders = ",".join("?" * len(difficulties))
-            where.append(f"LOWER(p.difficulty) IN ({placeholders})")
+            conds = " OR ".join("LOWER(p.difficulty) = ?" for _ in difficulties)
+            where.append(f"({conds})")
             args.extend([d.lower() for d in difficulties])
 
         if topics:
-            placeholders = ",".join("?" * len(topics))
+            conds = " OR ".join("LOWER(t2.name) = ?" for _ in topics)
             where.append(f"""p.id IN (
                 SELECT pt2.problem_id FROM problem_topics pt2
                 JOIN topics t2 ON t2.id = pt2.topic_id
-                WHERE LOWER(t2.name) IN ({placeholders}))""")
+                WHERE {conds})""")
             args.extend([t.lower() for t in topics])
 
         if search and search.strip():
