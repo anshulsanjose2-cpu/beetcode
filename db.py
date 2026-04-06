@@ -67,8 +67,14 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS hints (
         problem_id INTEGER PRIMARY KEY REFERENCES problems(id),
         hint       TEXT    NOT NULL DEFAULT '',
+        answer     TEXT    NOT NULL DEFAULT '',
         updated_at INTEGER DEFAULT (strftime('%s','now'))
     )""",
+]
+
+# Migrations for existing deployments (run after init_schema; errors silently ignored)
+MIGRATIONS = [
+    "ALTER TABLE hints ADD COLUMN answer TEXT NOT NULL DEFAULT ''",
 ]
 
 DROP_ALL = [
@@ -154,6 +160,11 @@ class TursoDB:
         """Create tables and indexes. DDL must run outside a transaction."""
         for sql in SCHEMA:
             self._run([self._stmt(sql)])
+        for sql in MIGRATIONS:
+            try:
+                self._run([self._stmt(sql)])
+            except Exception:
+                pass  # column already exists
 
     def drop_all(self) -> None:
         for sql in DROP_ALL:
@@ -321,20 +332,25 @@ class TursoDB:
 
     # ── Hints ─────────────────────────────────────────────────────────────────
 
-    def save_hint(self, problem_id: int, hint: str) -> None:
+    def save_hint(self, problem_id: int, hint: str, answer: str = "") -> None:
         self._run([self._stmt(
-            """INSERT INTO hints (problem_id, hint, updated_at)
-               VALUES (?, ?, strftime('%s','now'))
+            """INSERT INTO hints (problem_id, hint, answer, updated_at)
+               VALUES (?, ?, ?, strftime('%s','now'))
                ON CONFLICT(problem_id) DO UPDATE SET
                    hint = excluded.hint,
+                   answer = excluded.answer,
                    updated_at = strftime('%s','now')""",
-            [problem_id, hint],
+            [problem_id, hint, answer],
         )])
 
-    def get_hint(self, problem_id: int) -> str:
-        return self.scalar(
-            "SELECT hint FROM hints WHERE problem_id = ?", [problem_id]
-        ) or ""
+    def get_hint(self, problem_id: int) -> tuple[str, str]:
+        """Return (hint, answer) for a problem."""
+        res = self.rows(
+            "SELECT hint, answer FROM hints WHERE problem_id = ?", [problem_id]
+        )
+        if not res:
+            return ("", "")
+        return (self._val(res[0][0]) or "", self._val(res[0][1]) or "")
 
     def get_hint_ids(self) -> set[int]:
         """Return set of problem IDs that already have a hint."""
