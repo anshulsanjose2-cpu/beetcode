@@ -63,6 +63,12 @@ SCHEMA = [
         PRIMARY KEY (user_id, problem_id)
     )""",
     "CREATE INDEX IF NOT EXISTS idx_usol_user ON user_solutions(user_id)",
+    # ── Hints ─────────────────────────────────────────────────────────────────
+    """CREATE TABLE IF NOT EXISTS hints (
+        problem_id INTEGER PRIMARY KEY REFERENCES problems(id),
+        hint       TEXT    NOT NULL DEFAULT '',
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+    )""",
 ]
 
 DROP_ALL = [
@@ -74,6 +80,7 @@ DROP_ALL = [
     "DROP TABLE IF EXISTS topics",
     "DROP TABLE IF EXISTS problems",
     "DROP TABLE IF EXISTS companies",
+    "DROP TABLE IF EXISTS hints",
     "DROP TABLE IF EXISTS problem_tags",
 ]
 
@@ -311,3 +318,47 @@ class TursoDB:
             "SELECT code FROM user_solutions WHERE user_id = ? AND problem_id = ?",
             [user_id, problem_id],
         ) or ""
+
+    # ── Hints ─────────────────────────────────────────────────────────────────
+
+    def save_hint(self, problem_id: int, hint: str) -> None:
+        self._run([self._stmt(
+            """INSERT INTO hints (problem_id, hint, updated_at)
+               VALUES (?, ?, strftime('%s','now'))
+               ON CONFLICT(problem_id) DO UPDATE SET
+                   hint = excluded.hint,
+                   updated_at = strftime('%s','now')""",
+            [problem_id, hint],
+        )])
+
+    def get_hint(self, problem_id: int) -> str:
+        return self.scalar(
+            "SELECT hint FROM hints WHERE problem_id = ?", [problem_id]
+        ) or ""
+
+    def get_hint_ids(self) -> set[int]:
+        """Return set of problem IDs that already have a hint."""
+        return {self._val(r[0]) for r in
+                self.rows("SELECT problem_id FROM hints WHERE hint != ''")}
+
+    def get_problems_without_hints(self) -> list[dict]:
+        """Return all problems that have no hint yet (for batch generation)."""
+        sql = """
+            SELECT p.id, p.title, p.difficulty,
+                   GROUP_CONCAT(DISTINCT t.name) AS topics
+            FROM problems p
+            LEFT JOIN problem_topics pt ON pt.problem_id = p.id
+            LEFT JOIN topics t ON t.id = pt.topic_id
+            WHERE p.id NOT IN (SELECT problem_id FROM hints WHERE hint != '')
+            GROUP BY p.id
+            ORDER BY p.id
+        """
+        return [
+            {
+                "id":         self._val(r[0]),
+                "title":      self._val(r[1]) or "",
+                "difficulty": self._val(r[2]) or "",
+                "topics":     [x for x in (self._val(r[3]) or "").split(",") if x],
+            }
+            for r in self.rows(sql)
+        ]
