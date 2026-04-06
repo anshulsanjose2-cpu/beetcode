@@ -315,7 +315,6 @@ with st.sidebar:
     if "user_id" in st.session_state:
         if st.button("➕ Add Problem", use_container_width=True):
             add_problem_dialog()
-    st.caption("To refresh data, run `python seed.py --reset` locally.")
 
 # ── Query (deduplicated by problem ID) ────────────────────────────────────────
 _raw = db.query_problems(
