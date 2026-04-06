@@ -67,7 +67,7 @@ body { background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Sego
 """
 
 # ── DB connection (cached per schema version so deploys bust the cache) ──────
-_SCHEMA_VERSION = "v6"   # bump this whenever db.py schema changes
+_SCHEMA_VERSION = "v7"   # bump this whenever db.py schema changes
 
 @st.cache_resource
 def get_db(_v: str = _SCHEMA_VERSION) -> TursoDB:
@@ -347,7 +347,10 @@ def interactive_table(problems):
     user_id      = st.session_state["user_id"]
     solution_ids = st.session_state.get("solution_ids") or db.get_solution_ids(user_id)
     st.session_state["solution_ids"] = solution_ids
-    hint_ids     = st.session_state.get("hint_ids") or db.get_hint_ids()
+    try:
+        hint_ids = st.session_state.get("hint_ids") or db.get_hint_ids()
+    except Exception:
+        hint_ids = set()
     st.session_state["hint_ids"] = hint_ids
 
     # Progress bar
