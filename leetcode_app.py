@@ -415,9 +415,10 @@ def interactive_table(problems):
         cols[1].markdown(f'<span style="color:#888;font-size:13px">{pid}</span>',
                          unsafe_allow_html=True)
         safe_title = p["Title"].replace('"', '&quot;')
+        display_title = p["Title"].replace('`', '&#96;')
         cols[2].markdown(
             f'<a href="{p["URL"]}" target="_blank" '
-            f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{p["Title"]}</a>'
+            f'style="color:#eff2f6cc;text-decoration:none;font-weight:500">{display_title}</a>'
             f'<span class="copy-btn" data-title="{safe_title}" title="Copy title" '
             f'style="cursor:pointer;margin-left:6px;color:#555;font-size:11px;'
             f'user-select:none;vertical-align:middle">⧉</span>',

@@ -343,6 +343,17 @@ class TursoDB:
             [problem_id, hint, answer],
         )])
 
+    def save_answer(self, problem_id: int, answer: str) -> None:
+        """Update only the answer for a problem (preserves existing hint)."""
+        self._run([self._stmt(
+            """INSERT INTO hints (problem_id, hint, answer, updated_at)
+               VALUES (?, '', ?, strftime('%s','now'))
+               ON CONFLICT(problem_id) DO UPDATE SET
+                   answer = excluded.answer,
+                   updated_at = strftime('%s','now')""",
+            [problem_id, answer],
+        )])
+
     def get_hint(self, problem_id: int) -> tuple[str, str]:
         """Return (hint, answer) for a problem."""
         res = self.rows(
@@ -356,6 +367,28 @@ class TursoDB:
         """Return set of problem IDs that already have a hint."""
         return {self._val(r[0]) for r in
                 self.rows("SELECT problem_id FROM hints WHERE hint != ''")}
+
+    def get_problems_without_answers(self) -> list[dict]:
+        """Return all problems that have no answer yet (hint may or may not exist)."""
+        sql = """
+            SELECT p.id, p.title, p.difficulty,
+                   GROUP_CONCAT(DISTINCT t.name) AS topics
+            FROM problems p
+            LEFT JOIN problem_topics pt ON pt.problem_id = p.id
+            LEFT JOIN topics t ON t.id = pt.topic_id
+            WHERE p.id NOT IN (SELECT problem_id FROM hints WHERE answer != '')
+            GROUP BY p.id
+            ORDER BY p.id
+        """
+        return [
+            {
+                "id":         self._val(r[0]),
+                "title":      self._val(r[1]) or "",
+                "difficulty": self._val(r[2]) or "",
+                "topics":     [x for x in (self._val(r[3]) or "").split(",") if x],
+            }
+            for r in self.rows(sql)
+        ]
 
     def get_problems_without_hints(self) -> list[dict]:
         """Return all problems that have no hint yet (for batch generation)."""
